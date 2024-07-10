@@ -10,6 +10,8 @@ from IPython.display import Markdown
 
 # Add Graphviz to the system PATH
 os.environ["PATH"] += os.pathsep + "\graphviz\bin"
+os.environ["PATH"] += os.pathsep + "\graphviz\bin\dot.exe"
+print(os.environ["PATH"])
 
 
 app = Flask(__name__)
