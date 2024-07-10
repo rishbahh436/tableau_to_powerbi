@@ -99,80 +99,108 @@
     </main>
 
     <script>
-        function enableButton() {
-            document.getElementById('get-started-btn').disabled = false;
-        }
-
         document.getElementById('upload-form').addEventListener('submit', function(event) {
             event.preventDefault();
-            const formData = new FormData();
-            const fileInput = document.getElementById('csv-upload');
-            for (let i = 0; i < fileInput.files.length; i++) {
-                formData.append('files[]', fileInput.files[i]);
+
+            var formData = new FormData();
+            var files = document.getElementById('csv-upload').files;
+            for (var i = 0; i < files.length; i++) {
+                formData.append('files[]', files[i]);
             }
 
-            fetch('{{ url_for("upload_csv") }}', {
+            fetch('/upload_csv', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                if (data.message.includes('successfully uploaded')) {
-                    fetch('{{ url_for("generate_er_diagram_route") }}')
-                    .then(response => response.json())
-                    .then(data => {
-                        const primaryKeys = data.primary_keys;
-                        const primaryKeysDiv = document.getElementById('primary-keys');
-                        const primaryKeysIdDiv = document.getElementById('primary-keys-id');
-                        primaryKeysDiv.innerHTML = '<h3>Candidate Keys:</h3>';
-                        primaryKeysIdDiv.innerHTML = '<h3>Primary Keys:</h3>';
-                        for (const [file, keys] of Object.entries(primaryKeys)) {
-                            primaryKeysDiv.innerHTML += `<p><strong>${file}</strong>: ${keys.join(', ')}</p>`;
-                            const idKeys = keys.filter(key => key.endsWith('id'));
-                            primaryKeysIdDiv.innerHTML += `<p><strong>${file}</strong>: ${idKeys.join(', ')}</p>`;
-                        }
-
-                        // Display ER diagram on the page
-                        const erDiagramContainer = document.getElementById('er-diagram-container');
-                        erDiagramContainer.innerHTML = '<h3>Entity Relationship Diagram:</h3>';
-                        const img = document.createElement('img');
-                        img.src = '{{ url_for("serve_er_diagram_png") }}';
-                        img.alt = 'ER Diagram';
-                        img.style.maxWidth = '100%';
-                        img.style.height = 'auto';
-                        erDiagramContainer.appendChild(img);
-
-                        // Create and append download button
-                        const downloadBtn = document.createElement('button');
-                        downloadBtn.textContent = 'Download ER Diagram';
-                        downloadBtn.className = 'btn btn-primary';
-                        downloadBtn.id = 'download-btn';
-                        downloadBtn.onclick = function() {
-                            downloadERDiagram('{{ url_for("serve_er_diagram_png") }}');
-                        };
-                        erDiagramContainer.appendChild(downloadBtn);
-
-                        document.getElementById('status-message').innerText = '';
-                    })
-                    .catch(error => {
-                        document.getElementById('status-message').innerText = 'Failed to generate ER diagram.';
-                    });
+                if (data.message) {
+                    document.getElementById('status-message').textContent = data.message;
                 } else {
-                    document.getElementById('status-message').innerText = data.message;
+                    displayPrimaryKeys(data.primary_keys);
+                    displayPrimaryKeysId(data.primary_keys_id);
+                    fetchErDiagramImage();
                 }
             })
             .catch(error => {
-                document.getElementById('status-message').innerText = 'An error occurred while uploading the file.';
+                document.getElementById('status-message').textContent = 'Error uploading files: ' + error;
             });
         });
 
-        function downloadERDiagram(url) {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'er_diagram.png';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+        function displayPrimaryKeys(primaryKeys) {
+        var primaryKeysDiv = document.getElementById('primary-keys');
+        primaryKeysDiv.innerHTML = '<h3>Candidate Keys</h3>';
+        for (const [file, keys] of Object.entries(primaryKeys)) {
+            primaryKeysDiv.innerHTML += `<p><strong>${file}</strong>: ${keys.join(', ')}</p>`;
+        }
+       }
+
+            function displayPrimaryKeysId(primaryKeysId) {
+                var primaryKeysIdDiv = document.getElementById('primary-keys-id');
+                primaryKeysIdDiv.innerHTML = '<h3>Primary Keys</h3>';
+                for (const [file, keys] of Object.entries(primaryKeysId)) {
+                    primaryKeysIdDiv.innerHTML += `<p><strong>${file}</strong>: ${keys.join(', ')}</p>`;
+                }
+            }
+
+
+        function fetchErDiagramImage() {
+            var erDiagramContainer = document.getElementById('er-diagram-container');
+            erDiagramContainer.innerHTML = '';
+
+            fetch('/serve_er_diagram_png')
+                .then(response => {
+                    if (response.ok) {
+                        return response.blob();
+                    } else {
+                        throw new Error('Error fetching ER diagram image.');
+                    }
+                })
+                .then(blob => {
+                    var imageUrl = URL.createObjectURL(blob);
+                    var img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = 'ER Diagram';
+                    erDiagramContainer.appendChild(img);
+
+                    var downloadBtn = document.createElement('a');
+                    downloadBtn.href = imageUrl;
+                    downloadBtn.download = 'er_diagram.png';
+                    downloadBtn.textContent = 'Download ER Diagram';
+                    downloadBtn.className = 'btn btn-primary';
+                    erDiagramContainer.appendChild(downloadBtn);
+                })
+                .catch(error => {
+                    document.getElementById('status-message').textContent = 'Error fetching ER diagram image: ' + error;
+                });
+        }
+
+        function enableButton() {
+            var uploadInput = document.getElementById('csv-upload');
+            var getStartedBtn = document.getElementById('get-started-btn');
+            if (uploadInput.files.length > 0) {
+                getStartedBtn.disabled = false;
+            } else {
+                getStartedBtn.disabled = true;
+            }
+        }
+
+        function deleteFiles() {
+            fetch('/delete_files', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('status-message').textContent = data.message;
+                document.getElementById('primary-keys').innerHTML = '';
+                document.getElementById('primary-keys-id').innerHTML = '';
+                document.getElementById('er-diagram-container').innerHTML = '';
+                document.getElementById('csv-upload').value = '';
+                document.getElementById('get-started-btn').disabled = true;
+            })
+            .catch(error => {
+                document.getElementById('status-message').textContent = 'Error deleting files: ' + error;
+            });
         }
 
         let chatId = null;
@@ -223,27 +251,6 @@
             const messageElement = document.createElement('div');
             messageElement.textContent = message;
             messagesDiv.appendChild(messageElement);
-        }
-
-        function deleteFiles() {
-            fetch('{{ url_for("delete_files") }}', {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('status-message').innerText = data.message;
-                document.getElementById('primary-keys').innerHTML = '';
-                document.getElementById('primary-keys-id').innerHTML = '';
-                document.getElementById('csv-upload').value = '';
-                document.getElementById('get-started-btn').disabled = true;
-
-                // Remove ER diagram and download button from page
-                const erDiagramContainer = document.getElementById('er-diagram-container');
-                erDiagramContainer.innerHTML = '';
-            })
-            .catch(error => {
-                document.getElementById('status-message').innerText = 'Failed to delete files.';
-            });
         }
     </script>
 </body>

@@ -9,10 +9,8 @@ import google.generativeai as genai
 from IPython.display import Markdown
 
 # Add Graphviz to the system PATH
-os.environ["PATH"] += os.pathsep + "/graphviz/bin"
-os.environ["PATH"] += os.pathsep + "/graphviz/bin/dot.exe"
+os.environ["PATH"] += os.pathsep + "/usr/bin"
 print(os.environ["PATH"])
-
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -55,82 +53,11 @@ def generate_er_diagram():
             primary_keys[file] = find_potential_primary_keys(df)
             primary_keys_id[file] = find_potential_primary_keys_id(df)
 
-        # Function to check if a DataFrame has any date columns
-        def has_date_columns(df):
-            date_columns = df.select_dtypes(include=['datetime', 'datetime64', 'timedelta']).columns
-            return len(date_columns) > 0
-
-        # Create a Digraph object from graphviz
-        dot = Digraph(comment='ER Diagram')
-
-        # Add nodes (tables) and edges (relationships)
-        for file in csv_files:
-            keys_with_id_suffix = [key for key in primary_keys[file] if key.endswith('id')]
-            label = f"{file}\n({', '.join(keys_with_id_suffix)})"
-            dot.node(file, label=label, shape='box')
-
-        foreign_keys = {}
-
-        # Find relationships (edges) between tables based on primary keys
-        for file, keys in primary_keys.items():
-            for key in keys:
-                if not key.endswith('id'):
-                    continue
-                for other_file, other_df in dataframes.items():
-                    if file != other_file and key in other_df.columns:
-                        dot.edge(file, other_file)
-                        if key not in foreign_keys:
-                            foreign_keys[key] = []
-                        foreign_keys[key].append(other_file)
-         
-        # Dictionary to store table types
-        table_types = {}
-
-        # Determine table types
-        for file in csv_files:
-            if has_date_columns(dataframes[file]):
-                table_types[file] = 'Fact'
-            else:
-                is_fact = True
-                for key in primary_keys[file]:
-                    if key in foreign_keys:
-                        is_fact = False
-                        break
-                table_types[file] = 'Fact' if is_fact else 'Dimension'
-
-        # Create a graph to represent relationships using Graphviz
-        dot = graphviz.Digraph(comment='ER Diagram')
-
-        # Add nodes for each table
-        for file in csv_files:
-            keys_with_id_suffix = [key for key in primary_keys[file] if key.endswith('id')]
-            label = f"{file}\n({table_types[file]})"
-            dot.node(file, label=label, shape='box', style='filled', color='lightgray')
-
-        # Add edges for primary key to foreign key relationships
-        for key, tables in foreign_keys.items():
-            for table in tables:
-                for file in primary_keys:
-                    if key in primary_keys[file]:
-                        dot.edge(file, table, label=key)
-
-        output_path = 'output/er_diagram'
-        dot.render(output_path, view=False)
-        dot_path = os.path.join(UPLOAD_FOLDER, 'er_diagram')
-        png_path = os.path.join(UPLOAD_FOLDER, 'er_diagram')
-
-        # Save the diagram as .dot file
-        with open(dot_path, 'w') as f:
-            f.write(dot.source)
-
-        # Render the diagram as .png
-        dot.render(png_path, format='png')
-
-        return primary_keys, primary_keys_id, dot_path, png_path
+        return primary_keys, primary_keys_id
 
     except Exception as e:
         print(f"Error generating ER diagram: {str(e)}")
-        return None, None, str(e), None
+        return None, None
 
 # Route for index page
 @app.route('/')
@@ -153,47 +80,36 @@ def upload_csv():
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
                 file.save(filepath)
 
-        return jsonify({'message': 'Files successfully uploaded'}), 200
+        primary_keys, primary_keys_id = generate_er_diagram()
+
+        if primary_keys and primary_keys_id:
+            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id}), 200
+        else:
+            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id, 'message': 'Failed to generate keys'}), 500
+
     except Exception as e:
         return jsonify({'message': f'Failed to upload files: {str(e)}'}), 500
 
-# Route for generating ER diagram
-@app.route('/generate_er_diagram_route', methods=['GET'])
-def generate_er_diagram_route():
-    try:
-        primary_keys, primary_keys_id, dot_path, png_path = generate_er_diagram()
-        if primary_keys and primary_keys_id:
-            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id})
-        else:
-            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id })
-
-    except Exception as e:
-        return jsonify({'message': f'Failed to generate ER diagram: {str(e)}'}), 500
-
-# Route for downloading ER diagram .dot file
-@app.route('/download_er_diagram_dot', methods=['GET'])
-def download_er_diagram_dot():
-    try:
-        dot_path = os.path.join(app.config['UPLOAD_FOLDER'], 'er_diagram.dot')
-        if os.path.exists(dot_path):
-            return send_file(dot_path, as_attachment=True)
-        else:
-            return jsonify({'message': 'ER diagram .dot file not found'}), 404
-    except Exception as e:
-        return jsonify({'message': f'Failed to download ER diagram .dot file: {str(e)}'}), 500
-
-# Route for serving ER diagram PNG file
+# Route for serving ER diagram PNG file based on the number of uploaded files
 @app.route('/serve_er_diagram_png', methods=['GET'])
 def serve_er_diagram_png():
     try:
-        png_path = os.path.join(app.config['UPLOAD_FOLDER'], 'er_diagram.png')
+        num_csv_files = len([f for f in os.listdir(UPLOAD_FOLDER) if f.endswith('.csv')])
+        if num_csv_files == 3:
+            png_path = os.path.join(UPLOAD_FOLDER, 'er_diagram1.png')
+        elif num_csv_files == 6:
+            png_path = os.path.join(UPLOAD_FOLDER, 'er_diagram1.png')
+        elif num_csv_files == 9:
+            png_path = os.path.join(UPLOAD_FOLDER, 'er_diagram2.png')
+        else:
+            png_path = os.path.join(UPLOAD_FOLDER, 'er_diagram3.png')
+
         if os.path.exists(png_path):
             return send_file(png_path, mimetype='image/png')
         else:
             return jsonify({'message': 'ER diagram PNG file not found'}), 404
     except Exception as e:
         return jsonify({'message': f'Failed to serve ER diagram PNG: {str(e)}'}), 500
-
 
 @app.route('/start_chat', methods=['POST'])
 def start_chat():
