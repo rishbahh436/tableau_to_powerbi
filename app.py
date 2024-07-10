@@ -162,10 +162,10 @@ def upload_csv():
 def generate_er_diagram_route():
     try:
         primary_keys, primary_keys_id, dot_path, png_path = generate_er_diagram()
-        if dot_path and png_path:
-            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id, 'dot_path': dot_path, 'png_path': png_path})
+        if primary_keys and primary_keys_id:
+            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id})
         else:
-            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id, 'message':f'Failed to generate ER diagram' })
+            return jsonify({'primary_keys': primary_keys, 'primary_keys_id': primary_keys_id })
 
     except Exception as e:
         return jsonify({'message': f'Failed to generate ER diagram: {str(e)}'}), 500
