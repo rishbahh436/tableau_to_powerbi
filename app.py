@@ -9,7 +9,7 @@ import google.generativeai as genai
 from IPython.display import Markdown
 
 # Add Graphviz to the system PATH
-os.environ["PATH"] += os.pathsep + "/e/Programming/Tableau to PowerBI-copy/.venv/Lib/site-packages/Graphviz-11.0.0-win64/bin"
+os.environ["PATH"] += os.pathsep + "/.venv/Lib/site-packages/Graphviz-11.0.0-win64/bin"
 
 
 app = Flask(__name__)
